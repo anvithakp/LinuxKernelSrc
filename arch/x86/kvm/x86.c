@@ -7350,6 +7350,7 @@ int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)
 	unsigned long nr, a0, a1, a2, a3, ret;
 	int op_64_bit;
 
+        
 	if (kvm_hv_hypercall_enabled(vcpu->kvm))
 		return kvm_hv_hypercall(vcpu);
 
@@ -7358,6 +7359,8 @@ int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)
 	a1 = kvm_rcx_read(vcpu);
 	a2 = kvm_rdx_read(vcpu);
 	a3 = kvm_rsi_read(vcpu);
+
+	printk("cmp283: inside kvm emulate for hypercall 0x%lX'", nr);
 
 	trace_kvm_hypercall(nr, a0, a1, a2, a3);
 
@@ -7396,6 +7399,10 @@ int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)
 		kvm_sched_yield(vcpu->kvm, a0);
 		ret = 0;
 		break;
+        case KVM_HC_CMPE283:
+                // Return 'CMPE283' value to Guest VM
+		ret = KVM_RET_CMP283;
+		break;
 	default:
 		ret = -KVM_ENOSYS;
 		break;
@@ -7403,6 +7410,7 @@ int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)
 out:
 	if (!op_64_bit)
 		ret = (u32)ret;
+        // Write return value in %rax
 	kvm_rax_write(vcpu, ret);
 
 	++vcpu->stat.hypercalls;

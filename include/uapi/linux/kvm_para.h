@@ -18,6 +18,9 @@
 #define KVM_EPERM		EPERM
 #define KVM_EOPNOTSUPP		95
 
+/* Custom return value for hypercall KVM_HC_CMPE283 */
+#define KVM_RET_CMP283		0x0033383245504D43
+
 #define KVM_HC_VAPIC_POLL_IRQ		1
 #define KVM_HC_MMU_OP			2
 #define KVM_HC_FEATURES			3
@@ -29,6 +32,9 @@
 #define KVM_HC_CLOCK_PAIRING		9
 #define KVM_HC_SEND_IPI		10
 #define KVM_HC_SCHED_YIELD		11
+
+/* Custom hypercall Number to return KVM_RET_CMP283 in %rax */
+#define KVM_HC_CMPE283               0x283
 
 /*
  * hypercalls use architecture specific
