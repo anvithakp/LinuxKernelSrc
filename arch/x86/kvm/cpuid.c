@@ -18,14 +18,20 @@
 #include <asm/processor.h>
 #include <asm/user.h>
 #include <asm/fpu/xstate.h>
+#include <asm/atomic.h>
 #include "cpuid.h"
 #include "lapic.h"
 #include "mmu.h"
 #include "trace.h"
 #include "pmu.h"
 
+atomic_t kvm_exit_counter=ATOMIC_INIT(0);
+EXPORT_SYMBOL(kvm_exit_counter);
+atomic_t kvm_exit_reason_arr[69]={ATOMIC_INIT(0)};
+EXPORT_SYMBOL(kvm_exit_reason_arr);
+
 static u32 xstate_required_size(u64 xstate_bv, bool compacted)
-{
+{	
 	int feature_bit = 0;
 	u32 ret = XSAVE_HDR_SIZE + XSAVE_HDR_OFFSET;
 
@@ -1028,11 +1034,44 @@ int kvm_emulate_cpuid(struct kvm_vcpu *vcpu)
 
 	eax = kvm_rax_read(vcpu);
 	ecx = kvm_rcx_read(vcpu);
+        printk("value given in ecx is : %d " , ecx);
+      /*  printk("cpuid kvm exit_counter: %ld, eax= %d", kvm_exit_counter, eax);*/
+        if(eax==0x4fffffff)
+{
+	eax = atomic_read(&kvm_exit_counter);
+	ebx=0;	
+	edx=0;
+}
+       /* printk("in cpuid leaf ffff "); */
+       
+        else if(eax==0x4ffffffd)
+	{
+	    	if(ecx == 3 || ecx == 4 || ecx == 5 || ecx == 6 || ecx == 11 || ecx == 17){
+            	eax = atomic_read(&kvm_exit_reason_arr[ecx]);
+       	    	ebx = 0;
+		ecx = 0;
+	    	edx = 0;
+	}
+		else if(ecx == 35 || ecx == 38 || ecx == 42 || ecx > 68){
+       	 	eax=0;
+		ecx=0;
+        	ebx=0;	
+		edx=0xffffffff;
+	}
+		else
+       	{
+		eax = atomic_read(&kvm_exit_reason_arr[ecx]);
+        	ebx=0;	
+		edx=0;	
+	} 
+	}       
+	else
 	kvm_cpuid(vcpu, &eax, &ebx, &ecx, &edx, true);
 	kvm_rax_write(vcpu, eax);
 	kvm_rbx_write(vcpu, ebx);
 	kvm_rcx_write(vcpu, ecx);
 	kvm_rdx_write(vcpu, edx);
+
 	return kvm_skip_emulated_instruction(vcpu);
 }
 EXPORT_SYMBOL_GPL(kvm_emulate_cpuid);

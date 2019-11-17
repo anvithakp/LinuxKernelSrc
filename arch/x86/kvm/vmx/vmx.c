@@ -44,6 +44,7 @@
 #include <asm/spec-ctrl.h>
 #include <asm/virtext.h>
 #include <asm/vmx.h>
+#include <asm/atomic.h>
 
 #include "capabilities.h"
 #include "cpuid.h"
@@ -63,6 +64,9 @@
 
 MODULE_AUTHOR("Qumranet");
 MODULE_LICENSE("GPL");
+
+extern atomic_t kvm_exit_counter;
+extern atomic_t kvm_exit_reason_arr[65];
 
 static const struct x86_cpu_id vmx_cpu_id[] = {
 	X86_FEATURE_MATCH(X86_FEATURE_VMX),
@@ -5854,10 +5858,15 @@ void dump_vmcs(void)
  * assistance.
  */
 static int vmx_handle_exit(struct kvm_vcpu *vcpu)
-{
+{       
 	struct vcpu_vmx *vmx = to_vmx(vcpu);
 	u32 exit_reason = vmx->exit_reason;
 	u32 vectoring_info = vmx->idt_vectoring_info;
+        
+
+           atomic_inc(&kvm_exit_reason_arr[exit_reason]);
+           atomic_inc(&kvm_exit_counter);
+           printk("vmx_handle_exit : total counter -> %d", atomic_read(&kvm_exit_counter));
 
 	trace_kvm_exit(exit_reason, vcpu, KVM_ISA_VMX);
 
