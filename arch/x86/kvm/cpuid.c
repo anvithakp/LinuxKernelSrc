@@ -1046,13 +1046,15 @@ int kvm_emulate_cpuid(struct kvm_vcpu *vcpu)
        
         else if(eax==0x4ffffffd)
 	{
-	    	if(ecx == 3 || ecx == 4 || ecx == 5 || ecx == 6 || ecx == 11 || ecx == 17){
+		 /* Not defined in KVM */
+	    	if(ecx == 3 || ecx == 4 || ecx == 5 || ecx == 6 || ecx == 11 || ecx == 17 || ecx == 66 || ecx == 67 || ecx == 68){
             	eax = atomic_read(&kvm_exit_reason_arr[ecx]);
        	    	ebx = 0;
 		ecx = 0;
 	    	edx = 0;
 	}
-		else if(ecx == 35 || ecx == 38 || ecx == 42 || ecx > 68){
+		 /* Not defined in SDM */
+		else if(ecx == 35 || ecx == 38 || ecx == 42 || ecx == 65 || ecx > 68){
        	 	eax=0;
 		ecx=0;
         	ebx=0;	
