@@ -66,7 +66,7 @@ MODULE_AUTHOR("Qumranet");
 MODULE_LICENSE("GPL");
 
 extern atomic_t kvm_exit_counter;
-extern atomic_t kvm_exit_reason_arr[65];
+extern atomic_t kvm_exit_reason_arr[69];
 
 static const struct x86_cpu_id vmx_cpu_id[] = {
 	X86_FEATURE_MATCH(X86_FEATURE_VMX),
