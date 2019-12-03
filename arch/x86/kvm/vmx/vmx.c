@@ -66,7 +66,9 @@ MODULE_AUTHOR("Qumranet");
 MODULE_LICENSE("GPL");
 
 extern atomic_t kvm_exit_counter;
+extern atomic_long_t kvm_total_exits_time;
 extern atomic_t kvm_exit_reason_arr[69];
+extern atomic_long_t kvm_exit_total_time_arr[69];
 
 static const struct x86_cpu_id vmx_cpu_id[] = {
 	X86_FEATURE_MATCH(X86_FEATURE_VMX),
@@ -5862,9 +5864,12 @@ static int vmx_handle_exit(struct kvm_vcpu *vcpu)
 	struct vcpu_vmx *vmx = to_vmx(vcpu);
 	u32 exit_reason = vmx->exit_reason;
 	u32 vectoring_info = vmx->idt_vectoring_info;
-        
-
-           atomic_inc(&kvm_exit_reason_arr[exit_reason]);
+       
+           long kvm_exit_start_time=rdtsc();
+           long kvm_exit_end_time=0;
+           long kvm_exit_delta_time=0;	
+	   int returnValue = 0;	
+	   atomic_inc(&kvm_exit_reason_arr[exit_reason]);
            atomic_inc(&kvm_exit_counter);
            printk("vmx_handle_exit : total counter -> %d", atomic_read(&kvm_exit_counter));
 
@@ -5881,18 +5886,23 @@ static int vmx_handle_exit(struct kvm_vcpu *vcpu)
 		vmx_flush_pml_buffer(vcpu);
 
 	/* If guest state is invalid, start emulating */
-	if (vmx->emulation_required)
-		return handle_invalid_guest_state(vcpu);
+	if (vmx->emulation_required) {
+		returnValue = handle_invalid_guest_state(vcpu);
+		goto exit_label;
+	}
 
-	if (is_guest_mode(vcpu) && nested_vmx_exit_reflected(vcpu, exit_reason))
-		return nested_vmx_reflect_vmexit(vcpu, exit_reason);
+	if (is_guest_mode(vcpu) && nested_vmx_exit_reflected(vcpu, exit_reason)) {
+		returnValue = nested_vmx_reflect_vmexit(vcpu, exit_reason);
+		goto exit_label;
+	}
 
 	if (exit_reason & VMX_EXIT_REASONS_FAILED_VMENTRY) {
 		dump_vmcs();
 		vcpu->run->exit_reason = KVM_EXIT_FAIL_ENTRY;
 		vcpu->run->fail_entry.hardware_entry_failure_reason
 			= exit_reason;
-		return 0;
+		returnValue = 0;
+		goto exit_label;
 	}
 
 	if (unlikely(vmx->fail)) {
@@ -5900,7 +5910,8 @@ static int vmx_handle_exit(struct kvm_vcpu *vcpu)
 		vcpu->run->exit_reason = KVM_EXIT_FAIL_ENTRY;
 		vcpu->run->fail_entry.hardware_entry_failure_reason
 			= vmcs_read32(VM_INSTRUCTION_ERROR);
-		return 0;
+		returnValue = 0;
+		goto exit_label;
 	}
 
 	/*
@@ -5926,7 +5937,8 @@ static int vmx_handle_exit(struct kvm_vcpu *vcpu)
 			vcpu->run->internal.data[3] =
 				vmcs_read64(GUEST_PHYSICAL_ADDRESS);
 		}
-		return 0;
+		returnValue = 0;
+		goto exit_label;
 	}
 
 	if (unlikely(!enable_vnmi &&
@@ -5949,8 +5961,10 @@ static int vmx_handle_exit(struct kvm_vcpu *vcpu)
 	}
 
 	if (exit_reason < kvm_vmx_max_exit_handlers
-	    && kvm_vmx_exit_handlers[exit_reason])
-		return kvm_vmx_exit_handlers[exit_reason](vcpu);
+	    && kvm_vmx_exit_handlers[exit_reason])  {
+		returnValue = kvm_vmx_exit_handlers[exit_reason](vcpu);
+		goto exit_label;
+	}
 	else {
 		vcpu_unimpl(vcpu, "vmx: unexpected exit reason 0x%x\n",
 				exit_reason);
@@ -5960,8 +5974,22 @@ static int vmx_handle_exit(struct kvm_vcpu *vcpu)
 			KVM_INTERNAL_ERROR_UNEXPECTED_EXIT_REASON;
 		vcpu->run->internal.ndata = 1;
 		vcpu->run->internal.data[0] = exit_reason;
-		return 0;
+		returnValue = 0;
+		goto exit_label;
 	}
+
+exit_label:
+	
+	kvm_exit_end_time=rdtsc();
+
+        kvm_exit_delta_time = kvm_exit_end_time - kvm_exit_start_time;
+
+	atomic_long_add(kvm_exit_delta_time, &kvm_exit_total_time_arr[exit_reason]);
+
+	atomic_long_add(kvm_exit_delta_time, &kvm_total_exits_time);
+
+	return returnValue;
+		
 }
 
 /*

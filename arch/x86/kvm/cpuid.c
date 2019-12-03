@@ -27,8 +27,12 @@
 
 atomic_t kvm_exit_counter=ATOMIC_INIT(0);
 EXPORT_SYMBOL(kvm_exit_counter);
+atomic_long_t kvm_total_exits_time=ATOMIC_LONG_INIT(0);
+EXPORT_SYMBOL(kvm_total_exits_time);
 atomic_t kvm_exit_reason_arr[69]={ATOMIC_INIT(0)};
 EXPORT_SYMBOL(kvm_exit_reason_arr);
+atomic_long_t kvm_exit_total_time_arr[69]={ATOMIC_LONG_INIT(0)};
+EXPORT_SYMBOL(kvm_exit_total_time_arr);
 
 static u32 xstate_required_size(u64 xstate_bv, bool compacted)
 {	
@@ -1028,6 +1032,8 @@ EXPORT_SYMBOL_GPL(kvm_cpuid);
 int kvm_emulate_cpuid(struct kvm_vcpu *vcpu)
 {
 	u32 eax, ebx, ecx, edx;
+	u64 eb64x = 0;
+	u64 ec64x = 0;
 
 	if (cpuid_fault_enabled(vcpu) && !kvm_require_cpl(vcpu, 0))
 		return 1;
@@ -1043,12 +1049,42 @@ int kvm_emulate_cpuid(struct kvm_vcpu *vcpu)
 	edx=0;
 }
        /* printk("in cpuid leaf ffff "); */
-       
+        else if(eax==0x4ffffffe)
+{
+	eax = 0;
+        eb64x = atomic_long_read(&kvm_total_exits_time);
+	ec64x = eb64x;
+	ebx   = eb64x >> 32;
+	ecx   = (ec64x << 32) >> 32;
+	edx   = 0;
+}
         else if(eax==0x4ffffffd)
 	{
 		 /* Not defined in KVM */
-	    	if(ecx == 3 || ecx == 4 || ecx == 5 || ecx == 6 || ecx == 11 || ecx == 17 || ecx == 66 || ecx == 67 || ecx == 68){
+	    	if(ecx == 3 || ecx == 4 || ecx == 5 || ecx == 6 || ecx == 11 || ecx == 17 || ecx == 66 || ecx == 67 || ecx == 68) {
             	eax = atomic_read(&kvm_exit_reason_arr[ecx]);
+       	    	ebx = 0;
+		ecx = 0;
+	    	edx = 0;
+		}
+		 /* Not defined in SDM */
+		else if(ecx == 35 || ecx == 38 || ecx == 42 || ecx == 65 || ecx > 68) {
+       	 	eax=0;
+		ecx=0;
+        	ebx=0;	
+		edx=0xffffffff;
+		}
+		else
+       		{
+		eax = atomic_read(&kvm_exit_reason_arr[ecx]);
+        	ebx=0;	
+		edx=0;	
+		} 
+} 	else if(eax==0x4ffffffc)
+	{
+		 /* Not defined in KVM */
+	    	if(ecx == 3 || ecx == 4 || ecx == 5 || ecx == 6 || ecx == 11 || ecx == 17 || ecx == 66 || ecx == 67 || ecx == 68){
+            	eax = 0;
        	    	ebx = 0;
 		ecx = 0;
 	    	edx = 0;
@@ -1056,19 +1092,23 @@ int kvm_emulate_cpuid(struct kvm_vcpu *vcpu)
 		 /* Not defined in SDM */
 		else if(ecx == 35 || ecx == 38 || ecx == 42 || ecx == 65 || ecx > 68){
        	 	eax=0;
-		ecx=0;
         	ebx=0;	
+		ecx=0;
 		edx=0xffffffff;
 	}
 		else
        	{
-		eax = atomic_read(&kvm_exit_reason_arr[ecx]);
-        	ebx=0;	
-		edx=0;	
+		eax = 0;
+		eb64x = atomic_long_read(&kvm_exit_total_time_arr[ecx]);
+		ec64x = eb64x;
+        	ebx   = eb64x >> 32;
+		ecx   = (ec64x << 32) >> 32;		
+		edx   = 0;	
 	} 
-	}       
-	else
+}       
+	else {
 	kvm_cpuid(vcpu, &eax, &ebx, &ecx, &edx, true);
+}
 	kvm_rax_write(vcpu, eax);
 	kvm_rbx_write(vcpu, ebx);
 	kvm_rcx_write(vcpu, ecx);
